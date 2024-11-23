@@ -3,8 +3,11 @@ package handlers
 import (
 	"encoding/json"
 	"net/http"
+	"os"
 
 	"github.com/KelpGF/Go-Observability/internal/services"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/propagation"
 )
 
 type Body struct {
@@ -16,6 +19,10 @@ func (b Body) isValid() bool {
 }
 
 func Validate(w http.ResponseWriter, r *http.Request) {
+	carrier := propagation.HeaderCarrier(r.Header)
+	ctx := r.Context()
+	ctx = otel.GetTextMapPropagator().Extract(ctx, carrier)
+
 	var body Body
 
 	err := json.NewDecoder(r.Body).Decode(&body)
@@ -35,19 +42,13 @@ func Validate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	response, err := services.HttpRequest("http://localhost:8080/zip-code/weather?zipcode=" + body.ZipCode)
+	response, err := services.HttpRequest(
+		ctx,
+		"http://"+os.Getenv("API_DNS")+"/zip-code/weather?zipcode="+body.ZipCode,
+	)
 
 	if err != nil {
 		errorMessage := newResponseError("Error on request ZipCode data:" + err.Error())
-
-		w.WriteHeader(http.StatusConflict)
-		json.NewEncoder(w).Encode(errorMessage)
-
-		return
-	}
-
-	if response.Code != http.StatusOK {
-		errorMessage := newResponseError("Error on request ZipCode data")
 
 		w.WriteHeader(http.StatusConflict)
 		json.NewEncoder(w).Encode(errorMessage)

@@ -5,6 +5,8 @@ import (
 	"net/http"
 
 	"github.com/KelpGF/Go-Observability/internal/services"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/propagation"
 )
 
 type SearchCEPResult struct {
@@ -29,10 +31,14 @@ type WeatherResult struct {
 }
 
 func WeatherByCepHandler(w http.ResponseWriter, r *http.Request) {
+	carrier := propagation.HeaderCarrier(r.Header)
+	ctx := r.Context()
+	ctx = otel.GetTextMapPropagator().Extract(ctx, carrier)
+
 	zipCode := r.URL.Query().Get("zipcode")
 	w.Header().Set("Content-Type", "application/json")
 
-	zipCodeData, err := services.GetZipCodeData(zipCode)
+	zipCodeData, err := services.GetZipCodeData(ctx, zipCode)
 
 	if err != nil {
 		errorString := err.Error()
@@ -54,7 +60,7 @@ func WeatherByCepHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	weatherData, err := services.GetWeatherData(zipCodeData.Localidade)
+	weatherData, err := services.GetWeatherData(ctx, zipCodeData.Localidade)
 
 	if err != nil {
 		errorMessage := newResponseError("Error on weather request")

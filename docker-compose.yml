@@ -1,10 +1,62 @@
 services:
   goapp:
     image: golang:1.23
-    entrypoint: sh -c "tail -f /dev/null"
+    # entrypoint: sh -c "tail -f /dev/null"
+    entrypoint: go run cmd/main.go
     container_name: go-otel
+    environment:
+      APP_NAME: Go-App-1
+      PORT: 8080
+      API_DNS: goapp2:8081
     ports:
       - "8080:8080"
     volumes:
       - .:/go/src/app
     working_dir: /go/src/app
+    depends_on:
+      - otel-collector
+    networks:
+      - go-otel
+
+  goapp2:
+    image: golang:1.23
+    entrypoint: go run cmd/main.go
+    container_name: go-otel-2
+    environment:
+      APP_NAME: Go-App-2
+      PORT: 8081
+      API_DNS: goapp:8080
+    ports:
+      - "8081:8081"
+    volumes:
+      - .:/go/src/app
+    working_dir: /go/src/app
+    depends_on:
+      - otel-collector
+    networks:
+      - go-otel
+
+  zipkin:
+    image: openzipkin/zipkin
+    container_name: zipkin
+    ports:
+      - "9411:9411"
+    networks:
+      - go-otel
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.114.0 
+    container_name: otel-collector
+    ports:
+      - "4317:4317"
+    volumes:
+      - ./.docker/otel-collector-config.yaml:/etc/otel-collector-config.yaml
+    command: ["--config=/etc/otel-collector-config.yaml"]
+    depends_on:
+      - zipkin
+    networks:
+      - go-otel
+
+networks:
+  go-otel:
+    driver: bridge

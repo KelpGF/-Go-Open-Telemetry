@@ -1,11 +1,15 @@
 package services
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
 	"net/url"
+
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/propagation"
 )
 
 type searchCEPResult struct {
@@ -71,42 +75,43 @@ type searchWeatherResult struct {
 }
 
 type httpRequestOutput struct {
-	Code int
-	Data []byte
+	Data       []byte
+	StatusCode int
 }
 
-func HttpRequest(url string) (httpRequestOutput, error) {
+func HttpRequest(ctx context.Context, url string) (httpRequestOutput, error) {
 	output := httpRequestOutput{}
 
-	req, err := http.Get(url)
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
 		return output, err
 	}
 
-	output.Code = req.StatusCode
-
-	res, err := io.ReadAll(req.Body)
+	otel.GetTextMapPropagator().Inject(ctx, propagation.HeaderCarrier(req.Header))
+	res, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return output, err
 	}
 
-	output.Data = res
+	defer res.Body.Close()
+	data, err := io.ReadAll(res.Body)
+	if err != nil {
+		return output, err
+	}
+
+	output.Data = data
+	output.StatusCode = res.StatusCode
 
 	return output, nil
 }
 
-func GetZipCodeData(zipCode string) (searchCEPResult, error) {
+func GetZipCodeData(ctx context.Context, zipCode string) (searchCEPResult, error) {
 	output := searchCEPResult{}
 
 	urlRequest := "https://viacep.com.br/ws/" + zipCode + "/json/"
-	result, err := HttpRequest(urlRequest)
+	result, err := HttpRequest(ctx, urlRequest)
 	if err != nil {
 		return output, err
-	}
-
-	statusCode := result.Code
-	if statusCode == 400 {
-		return output, errors.New("invalid zipcode")
 	}
 
 	err = json.Unmarshal(result.Data, &output)
@@ -121,12 +126,12 @@ func GetZipCodeData(zipCode string) (searchCEPResult, error) {
 	return output, nil
 }
 
-func GetWeatherData(city string) (searchWeatherResult, error) {
+func GetWeatherData(ctx context.Context, city string) (searchWeatherResult, error) {
 	output := searchWeatherResult{}
 
 	urlRequest := "http://api.weatherapi.com/v1/current.json?key=c4a0b6bf6e1342c38f3153503242109&q=" + url.QueryEscape(city)
 
-	result, err := HttpRequest(urlRequest)
+	result, err := HttpRequest(ctx, urlRequest)
 	if err != nil {
 		return output, err
 	}
