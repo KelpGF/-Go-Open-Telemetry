@@ -2,11 +2,11 @@ POST http://localhost:8080/zip-code/validate HTTP/1.1
 Content-Type: application/json
 
 {
-  "cep": "61940310"
+  "cep": "01153000"
 }
 
 ###
-GET http://localhost:8080/zip-code/weather?zipcode=61940310 HTTP/1.1
+GET http://localhost:8081/zip-code/weather?zipcode=01153000 HTTP/1.1
 
 ###
 GET http://localhost:8080/sleep HTTP/1.1
